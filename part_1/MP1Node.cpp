@@ -224,7 +224,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
     MsgTypes type = ((MessageHdr*)data)->msgType;
 
     if (type == JOINREQ) {
-        // send back a joinrep
+        // send back a JOINREP
         MessageHdr *msg;
         size_t msgsize = sizeof(MessageHdr) + sizeof(sender) + sizeof(MemberListEntry) * (memberNode->memberList).size() + 1;
         msg = (MessageHdr *) malloc(msgsize * sizeof(char));
@@ -254,18 +254,44 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
             entry.setheartbeat(0);
             entry.settimestamp(par->getcurrtime());
 
-            this->memberNode->memberList.push_back(entry);
+            memberNode->memberList.push_back(entry);
         }
-    
+        
+        free(sender);
+        free(msg);
+
     }else if (type == JOINREP) {
         // next: init memberShipList coming from introducer
-        
+        // deserialize
+        memberNode->memberList = deserializeMemberList(char *data);
+
     }else if (type == GOSSIP) {
         // update my membership list
+
     }
     
 }
 
+/*
+ * deserilize membership array to vector
+ */
+vector<MemberListEntry> MP1Node::deserializeMemberList() {
+    int offset = sizeof(MessageHdr) + sizeof(Address) + 3; // 1 + 2 paddling
+    int memberSize = size - offset;
+    vector<MemberListEntry> rt;
+
+    while (memberSize > 0) {
+        MemberListEntry *entry = (MemberListEntry *)(data + offset);
+        rt.push_back(*entry);
+
+        data += sizeof(MemberListEntry);
+        memberSize -= sizeof(MemberListEntry);
+    }    
+}
+
+/*
+ * deserilize membership vector to array
+ */
 char* MP1Node::serializeMemberList() {
     size_t size = sizeof(MemberListEntry) * memberNode->memberList.size();
     MemberListEntry *rt = (MemberListEntry *)malloc(size * sizeof(char));
