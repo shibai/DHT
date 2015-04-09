@@ -1,0 +1,4 @@
+MsgTypes = 4
+Address.addr = 6
+msgsize = 19
+MemberListEntry = 24

@@ -218,6 +218,65 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 	/*
 	 * Your code goes here
 	 */
+
+    Address *sender = new Address();
+    memcpy(sender->addr,data + 4,sizeof(Address));
+    MsgTypes type = ((MessageHdr*)data)->msgType;
+
+    if (type == JOINREQ) {
+        // send back a joinrep
+        MessageHdr *msg;
+        size_t msgsize = sizeof(MessageHdr) + sizeof(sender) + sizeof(MemberListEntry) * (memberNode->memberList).size() + 1;
+        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+
+        msg->msgType = JOINREP;
+        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
+        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr),serializeMemberList(), sizeof(MemberListEntry) * (memberNode->memberList).size());
+        emulNet->ENsend(&memberNode->addr, sender, (char *)msg, msgsize);
+
+        bool flag = false;
+        for (int i = 0; i < memberNode->memberList.size(); i++) {
+            if ((memberNode->memberList)[i].getid() == *(int *)(sender->addr)) {
+                (memberNode->memberList)[i].settimestamp(par->getcurrtime());
+                (memberNode->memberList)[i].setheartbeat(0);
+                (memberNode->memberList)[i].setport(*(short *)(sender->addr + 4));
+
+                flag = true;
+                break;
+            }
+        }
+
+        // add a new entry
+        if (!flag) {
+            MemberListEntry entry;
+            entry.setid(*(int *)(sender->addr));
+            entry.setport(*(short *)(sender->addr + 4));
+            entry.setheartbeat(0);
+            entry.settimestamp(par->getcurrtime());
+
+            this->memberNode->memberList.push_back(entry);
+        }
+    
+    }else if (type == JOINREP) {
+        // next: init memberShipList coming from introducer
+        
+    }else if (type == GOSSIP) {
+        // update my membership list
+    }
+    
+}
+
+char* MP1Node::serializeMemberList() {
+    size_t size = sizeof(MemberListEntry) * memberNode->memberList.size();
+    MemberListEntry *rt = (MemberListEntry *)malloc(size * sizeof(char));
+
+    for (int i = 0; i < memberNode->memberList.size(); i++) {
+        MemberListEntry entry = memberNode->memberList[i];
+        memcpy( (char *)(rt + i), &memberNode->memberList[i], sizeof(MemberListEntry) );
+       // cout << *(int *)((char*)(rt + i)) << endl;
+    }
+
+    return (char*)rt;
 }
 
 /**
