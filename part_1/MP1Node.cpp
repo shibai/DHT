@@ -263,7 +263,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
     }else if (type == JOINREP) {
         // next: init memberShipList coming from introducer
         // deserialize
-        memberNode->memberList = deserializeMemberList(char *data);
+        memberNode->memberList = deserializeMemberList(data,size);
 
     }else if (type == GOSSIP) {
         // update my membership list
@@ -275,7 +275,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 /*
  * deserilize membership array to vector
  */
-vector<MemberListEntry> MP1Node::deserializeMemberList() {
+vector<MemberListEntry> MP1Node::deserializeMemberList(char *data, int size) {
     int offset = sizeof(MessageHdr) + sizeof(Address) + 3; // 1 + 2 paddling
     int memberSize = size - offset;
     vector<MemberListEntry> rt;

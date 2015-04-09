@@ -79,6 +79,7 @@ public:
 	virtual ~MP1Node();
 
 	char* serializeMemberList();
+	vector<MemberListEntry> deserializeMemberList(char *,int);
 };
 
 #endif /* _MP1NODE_H_ */
