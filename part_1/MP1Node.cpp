@@ -261,13 +261,44 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
         free(msg);
 
     }else if (type == JOINREP) {
-        // next: init memberShipList coming from introducer
+        // init memberShipList coming from introducer
         // deserialize
         memberNode->memberList = deserializeMemberList(data,size);
 
     }else if (type == GOSSIP) {
         // update my membership list
+        vector<MemberListEntry> receivedMembershipList = deserializeMemberList(data,size);
 
+        for (int i = 0; i < receivedMembershipList.size(); i++) {
+            MemberListEntry newEntry = receivedMembershipList[i];
+            if (newEntry.getid() == *(int *)(&memberNode->addr)) {
+                continue;
+            }
+
+            bool exist = false;
+            for (int j = 0; j < memberNode->memberList.size(); j++) {
+                // next: update old member list
+                MemberListEntry oldEntry = memberNode->memberList[j];
+                if (newEntry.getid() == oldEntry.getid()) {
+                    if (newEntry.getheartbeat() > oldEntry.getheartbeat()) {
+                        memberNode->memberList[j] = newEntry;
+                        memberNode->memberList[j].settimestamp(par->getcurrtime());
+                    }
+
+                    // remove node from list
+                    if (newEntry.getheartbeat() == oldEntry.getheartbeat() && par->getcurrtime() - newEntry.gettimestamp() > 10) {
+                        memberNode->memberList.erase(memberNode->memberList.begin() + j);
+                    }
+                    exist = true;
+                    break;
+
+                }
+            }
+
+            if (!exist) {
+                memberNode->memberList.push_back(newEntry);
+            }
+        }
     }
     
 }
@@ -297,9 +328,8 @@ char* MP1Node::serializeMemberList() {
     MemberListEntry *rt = (MemberListEntry *)malloc(size * sizeof(char));
 
     for (int i = 0; i < memberNode->memberList.size(); i++) {
-        MemberListEntry entry = memberNode->memberList[i];
+        // MemberListEntry entry = memberNode->memberList[i];
         memcpy( (char *)(rt + i), &memberNode->memberList[i], sizeof(MemberListEntry) );
-       // cout << *(int *)((char*)(rt + i)) << endl;
     }
 
     return (char*)rt;
