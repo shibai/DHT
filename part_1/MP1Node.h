@@ -80,6 +80,7 @@ public:
 
 	char* serializeMemberList();
 	vector<MemberListEntry> deserializeMemberList(char *,int);
+	void randomPickAndGossip();
 };
 
 #endif /* _MP1NODE_H_ */
