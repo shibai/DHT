@@ -215,14 +215,15 @@ void MP1Node::checkMessages() {
  * DESCRIPTION: Message handler for different message types
  */
 bool MP1Node::recvCallBack(void *env, char *data, int size ) {
-	/*
-	 * Your code goes here
-	 */
+     /*
+    cout << *(int *)(memberNode->addr.addr) << endl;
+    cout << memberNode->heartbeat << endl;
+    */
 
     Address *sender = new Address();
     memcpy(sender->addr,data + 4,sizeof(Address));
     MsgTypes type = ((MessageHdr*)data)->msgType;
-
+    
     if (type == JOINREQ) {
         // send back a JOINREP
         MessageHdr *msg;
@@ -252,25 +253,22 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
             MemberListEntry entry;
             entry.setid(*(int *)(sender->addr));
             entry.setport(*(short *)(sender->addr + 4));
-            entry.setheartbeat(0);
+            entry.setheartbeat(*(long *)(data + sizeof(MessageHdr) + 1 + sizeof(Address)));
             entry.settimestamp(par->getcurrtime());
 
             memberNode->memberList.push_back(entry);
+
+
+            log->logNodeAdd(&memberNode->addr,sender);
         }
         
-        free(sender);
+        delete(sender);
         free(msg);
 
     }else if (type == JOINREP) {
         // init memberShipList coming from introducer
         // deserialize
-        memberNode->memberList = deserializeMemberList(data,size);
-
-        //cout << size << endl;
-        for (int j = 0; j < memberNode->memberList.size(); j++) {
-            // cout << memberNode->memberList[j].getid() << endl;
-        }
-        
+        memberNode->memberList = deserializeMemberList(data,size);        
 
     }else if (type == GOSSIP) {
         // update my membership list
@@ -290,6 +288,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
                     if (newEntry.getheartbeat() > oldEntry.getheartbeat()) {
                         memberNode->memberList[j] = newEntry;
                         memberNode->memberList[j].settimestamp(par->getcurrtime());
+                        //cout << memberNode->memberList[j].getheartbeat() << endl;
                     }
 
                     exist = true;
@@ -299,6 +298,9 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 
             if (!exist) {
                 memberNode->memberList.push_back(newEntry);
+
+
+                log->logNodeAdd(&memberNode->addr,sender);
             }
         }
     }
@@ -343,15 +345,26 @@ char* MP1Node::serializeMemberList() {
 
 void MP1Node::randomPickAndGossip() {
     Address *toaddr = (Address *)malloc(sizeof(Address));
-    short port = (memberNode->memberList[0]).getport();
-    memcpy(toaddr,&port,sizeof(int));
-    memcpy(toaddr + sizeof(int),&port,sizeof(int));
+    // cout << sizeof(Address) << endl;
+    srand (time(NULL));
+    int ranID = rand() % memberNode->memberList.size();
+
+    cout << memberNode->memberList.size() << endl;
+    cout << ranID;
+
+    int id = (memberNode->memberList[ranID]).getid();
+    short port = (memberNode->memberList[ranID]).getport(); // pick the first element, for now
+    memcpy(toaddr,&id,sizeof(int));
+    memcpy((char*)toaddr + sizeof(int),&port,sizeof(short));
     
     MessageHdr *msg;
-    //size_t size = sizeof(MessageHdr) + sizeof(Address) + 
-
-
-    // ENsend(&memberNode->addr, toaddr, char *data, int size);
+    size_t msgsize = sizeof(MessageHdr) + sizeof(Address) + sizeof(MemberListEntry) * memberNode->memberList.size() + 1;
+    msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+    msg->msgType = GOSSIP;
+    memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
+    memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr),serializeMemberList(), sizeof(MemberListEntry) * (memberNode->memberList).size());
+    
+    emulNet->ENsend(&memberNode->addr, toaddr, (char *)msg, msgsize);
 
     // run some test on membershipList
 
@@ -367,35 +380,52 @@ void MP1Node::randomPickAndGossip() {
  * 				Propagate your membership list
  */
 void MP1Node::nodeLoopOps() {
-
-	/*
-	 * Your code goes here
-	 */
-     // remove dead node
+    // remove dead node
     for (int i = 0; i < memberNode->memberList.size(); i++) {
         MemberListEntry entry = memberNode->memberList[i];
         if (entry.getid() == *(int *)(&memberNode->addr)) {
             memberNode->memberList.erase(memberNode->memberList.begin() + i);
             i--;
         }
+        // cout << memberNode->memberList[i].getheartbeat() << endl;
+        if (20 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
+            /*
+            cout << memberNode->memberList[i].getid() << endl;
+            cout << par->getcurrtime() << endl;
+            cout << memberNode->memberList[i].gettimestamp() << endl;
+            cout << memberNode->memberList[i].getheartbeat() << endl;
+            cout << "-------------" << endl;
+            */
 
-        if (10 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
-            //cout << par->getcurrtime() << endl;
-            //cout << memberNode->memberList[i].gettimestamp() << endl;
+            
+            Address *toaddr = (Address *)malloc(sizeof(Address));
+            int id = (memberNode->memberList[i]).getid();
+            short port = (memberNode->memberList[i]).getport(); // pick the first element, for now
+            memcpy(toaddr,&id,sizeof(int));
+            memcpy((char*)toaddr + sizeof(int),&port,sizeof(short));
+
+            log->logNodeRemove(&memberNode->addr,toaddr);
+            
+            free(toaddr);
+
+            memberNode->memberList.erase(memberNode->memberList.begin() + i);
+            i--;
         }
     }
 
     // increment heartbeat and add to list
     memberNode->heartbeat++;
+
     MemberListEntry entry;
     entry.setid(*(int *)(memberNode->addr.addr));
     entry.setport(*(short*)(memberNode->addr.addr + 4));
     entry.setheartbeat(memberNode->heartbeat);
     entry.settimestamp(par->getcurrtime());
     memberNode->memberList.push_back(entry);
+    // cout << memberNode->memberList.back().getheartbeat() << endl;
 
     // pick a neighbor randomly and gossip
-    //randomPickAndGossip();
+    randomPickAndGossip();
 
     return;
 }
