@@ -25,6 +25,8 @@ MP1Node::MP1Node(Member *member, Params *params, EmulNet *emul, Log *log, Addres
 	this->log = log;
 	this->par = params;
 	this->memberNode->addr = *address;
+
+    srand (time(NULL));
 }
 
 /**
@@ -205,6 +207,7 @@ void MP1Node::checkMessages() {
     	size = memberNode->mp1q.front().size;
     	memberNode->mp1q.pop();
     	recvCallBack((void *)memberNode, (char *)ptr, size);
+
     }
     return;
 }
@@ -220,20 +223,21 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
     cout << memberNode->heartbeat << endl;
     */
 
-    Address *sender = new Address();
+    Address *sender = (Address *)malloc(sizeof(Address));
     memcpy(sender->addr,data + 4,sizeof(Address));
     MsgTypes type = ((MessageHdr*)data)->msgType;
     
     if (type == JOINREQ) {
         // send back a JOINREP
         MessageHdr *msg;
-        size_t msgsize = sizeof(MessageHdr) + sizeof(sender) + sizeof(MemberListEntry) * (memberNode->memberList).size() + 1;
+        size_t msgsize = sizeof(MessageHdr) + sizeof(Address) + sizeof(MemberListEntry) * (memberNode->memberList).size() + 1;
         msg = (MessageHdr *) malloc(msgsize * sizeof(char));
 
         msg->msgType = JOINREP;
         memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
         memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr),serializeMemberList(), sizeof(MemberListEntry) * (memberNode->memberList).size());
         emulNet->ENsend(&memberNode->addr, sender, (char *)msg, msgsize);
+
 
         // node exists 
         bool flag = false;
@@ -262,13 +266,13 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
             log->logNodeAdd(&memberNode->addr,sender);
         }
         
-        delete(sender);
+        free(sender);
         free(msg);
 
     }else if (type == JOINREP) {
         // init memberShipList coming from introducer
-        // deserialize
-        memberNode->memberList = deserializeMemberList(data,size);        
+        memberNode->memberList = deserializeMemberList(data,size);
+        memberNode->inGroup = true;
 
     }else if (type == GOSSIP) {
         // update my membership list
@@ -288,7 +292,6 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
                     if (newEntry.getheartbeat() > oldEntry.getheartbeat()) {
                         memberNode->memberList[j] = newEntry;
                         memberNode->memberList[j].settimestamp(par->getcurrtime());
-                        //cout << memberNode->memberList[j].getheartbeat() << endl;
                     }
 
                     exist = true;
@@ -299,8 +302,13 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
             if (!exist) {
                 memberNode->memberList.push_back(newEntry);
 
+                Address *t = (Address*)malloc(sizeof(Address));
+                int id = newEntry.getid();
+                short port = newEntry.getport(); // pick the first element, for now
+                memcpy(t,&id,sizeof(int));
+                memcpy((char*)t + sizeof(int),&port,sizeof(short));
 
-                log->logNodeAdd(&memberNode->addr,sender);
+                log->logNodeAdd(&memberNode->addr,t);
             }
         }
     }
@@ -311,7 +319,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
  * deserilize membership array to vector
  */
 vector<MemberListEntry> MP1Node::deserializeMemberList(char *data, int size) {
-    int offset = sizeof(MessageHdr) + sizeof(Address) + 3; // 1 + 2 paddling
+    int offset = sizeof(MessageHdr) + sizeof(Address) + 1;
     int memberSize = size - offset;
     vector<MemberListEntry> rt;
 
@@ -319,8 +327,11 @@ vector<MemberListEntry> MP1Node::deserializeMemberList(char *data, int size) {
         MemberListEntry *entry = (MemberListEntry *)(data + offset);
         rt.push_back(*entry);
 
+        //cout << entry->getid() << endl;
+
         data += sizeof(MemberListEntry);
         memberSize -= sizeof(MemberListEntry);
+        // cout << memberSize << endl;
     }    
 
     return rt;
@@ -334,23 +345,28 @@ char* MP1Node::serializeMemberList() {
     MemberListEntry *rt = (MemberListEntry *)malloc(size * sizeof(char));
 
     for (int i = 0; i < memberNode->memberList.size(); i++) {
-        // MemberListEntry entry = memberNode->memberList[i];
         memcpy( (char *)(rt + i), &memberNode->memberList[i], sizeof(MemberListEntry) );
     }
 
     return (char*)rt;
 }
 
-
+int MP1Node::getid() {
+    return *(int *)memberNode->addr.addr;
+}
 
 void MP1Node::randomPickAndGossip() {
     Address *toaddr = (Address *)malloc(sizeof(Address));
-    // cout << sizeof(Address) << endl;
-    srand (time(NULL));
-    int ranID = rand() % memberNode->memberList.size();
 
-    cout << memberNode->memberList.size() << endl;
-    cout << ranID;
+    int ranID = rand() % memberNode->memberList.size();
+ //   cout << memberNode->memberList.size() << "--";
+/*
+    if (par->getcurrtime() < 20) {
+        cout << ranID << endl;
+        cout << *(int *)memberNode->addr.addr << endl;
+        cout << "------------" << endl;
+    }
+        */
 
     int id = (memberNode->memberList[ranID]).getid();
     short port = (memberNode->memberList[ranID]).getport(); // pick the first element, for now
@@ -365,6 +381,11 @@ void MP1Node::randomPickAndGossip() {
     memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr),serializeMemberList(), sizeof(MemberListEntry) * (memberNode->memberList).size());
     
     emulNet->ENsend(&memberNode->addr, toaddr, (char *)msg, msgsize);
+
+
+    string s = "send gossip to " + to_string(id); 
+    //cout << s << endl;
+    //log->LOG(&memberNode->addr,s.c_str());
 
     // run some test on membershipList
 
@@ -388,7 +409,7 @@ void MP1Node::nodeLoopOps() {
             i--;
         }
         // cout << memberNode->memberList[i].getheartbeat() << endl;
-        if (20 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
+        if (30 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
             /*
             cout << memberNode->memberList[i].getid() << endl;
             cout << par->getcurrtime() << endl;
@@ -422,8 +443,13 @@ void MP1Node::nodeLoopOps() {
     entry.setheartbeat(memberNode->heartbeat);
     entry.settimestamp(par->getcurrtime());
     memberNode->memberList.push_back(entry);
-    // cout << memberNode->memberList.back().getheartbeat() << endl;
-
+/*
+    if (*(int *)memberNode->addr.addr != 1) {
+        cout << *(int *)memberNode->addr.addr << endl;
+    cout << memberNode->memberList.back().getheartbeat() << endl;
+    cout << "-----------" << endl;
+    }
+    */
     // pick a neighbor randomly and gossip
     randomPickAndGossip();
 

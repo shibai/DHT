@@ -81,6 +81,7 @@ public:
 	char* serializeMemberList();
 	vector<MemberListEntry> deserializeMemberList(char *,int);
 	void randomPickAndGossip();
+	int getid();
 };
 
 #endif /* _MP1NODE_H_ */
