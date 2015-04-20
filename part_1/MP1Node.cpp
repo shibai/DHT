@@ -128,9 +128,10 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
     if ( 0 == memcmp((char *)&(memberNode->addr.addr), (char *)&(joinaddr->addr), sizeof(memberNode->addr.addr))) {
         // I am the group booter (first process to join the group). Boot up the group
 #ifdef DEBUGLOG
-        log->LOG(&memberNode->addr, "Starting up group...");
+        //log->LOG(&memberNode->addr, "Starting up group...");
 #endif
         memberNode->inGroup = true;
+        log->logNodeAdd(&memberNode->addr,&memberNode->addr);
     }
     else {
         size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
@@ -151,6 +152,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr) {
 
         free(msg);
     }
+    log->logNodeAdd(&memberNode->addr,&memberNode->addr);
 
     return 1;
 
@@ -268,6 +270,18 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
         memberNode->memberList = deserializeMemberList(data,size);
         memberNode->inGroup = true;
 
+        for (int i = 0; i < memberNode->memberList.size(); i++) {
+            Address *t = (Address*)malloc(sizeof(Address));
+            int id = memberNode->memberList[i].getid();
+            short port = memberNode->memberList[i].getport(); 
+            memcpy(t,&id,sizeof(int));
+            memcpy((char*)t + sizeof(int),&port,sizeof(short));
+            
+            log->logNodeAdd(&memberNode->addr,t);
+
+            free(t);
+        }
+
     }else if (type == GOSSIP) {
         // update my membership list
         vector<MemberListEntry> receivedMembershipList = deserializeMemberList(data,size);
@@ -302,6 +316,8 @@ bool MP1Node::recvCallBack(void *env, char *data, int size ) {
                 memcpy((char*)t + sizeof(int),&port,sizeof(short));
 
                 log->logNodeAdd(&memberNode->addr,t);
+
+                free(t);
             }
         }
     }
@@ -383,7 +399,7 @@ void MP1Node::nodeLoopOps() {
             i--;
         }
 
-        if ( par->EN_GPSZ * 2 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
+        if ( par->EN_GPSZ * 2 + 10 < par->getcurrtime() - memberNode->memberList[i].gettimestamp()) {
           
             Address *toaddr = (Address *)malloc(sizeof(Address));
             int id = (memberNode->memberList[i]).getid();
