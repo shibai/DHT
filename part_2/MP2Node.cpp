@@ -51,7 +51,7 @@ void MP2Node::updateRing() {
 	 */
 	// Sort the list based on the hashCode
 	sort(curMemList.begin(), curMemList.end());
-
+    ring = curMemList;
 
 	/*
 	 * Step 3: Run the stabilization protocol IF REQUIRED
@@ -108,9 +108,12 @@ size_t MP2Node::hashFunction(string key) {
  * 				3) Sends a message to the replica
  */
 void MP2Node::clientCreate(string key, string value) {
-	/*
-	 * Implement this
-	 */
+    
+    vector<Node> replicas = findNodes(key);
+    for (int i = 0; i < replicas.size(); i++) {
+        // Message msg = 
+	
+    }
 }
 
 /**
