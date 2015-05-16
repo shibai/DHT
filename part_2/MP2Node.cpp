@@ -109,6 +109,7 @@ size_t MP2Node::hashFunction(string key) {
  */
 void MP2Node::clientCreate(string key, string value) {
     g_transID++;
+    quorum[g_transID] = 0;
     vector<Node> replicas = findNodes(key);
   
     Message msg_pri(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
