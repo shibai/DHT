@@ -18,6 +18,7 @@
 #include "Params.h"
 #include "Message.h"
 #include "Queue.h"
+#include <unordered_map>
 
 /**
  * CLASS NAME: MP2Node
@@ -47,6 +48,8 @@ private:
 	EmulNet * emulNet;
 	// Object of Log
 	Log * log;
+    
+    unordered_map<int,int> quorum;
 
 public:
 	MP2Node(Member *memberNode, Params *par, EmulNet *emulNet, Log *log, Address *addressOfMember);

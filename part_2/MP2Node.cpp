@@ -108,12 +108,31 @@ size_t MP2Node::hashFunction(string key) {
  * 				3) Sends a message to the replica
  */
 void MP2Node::clientCreate(string key, string value) {
-    
+    g_transID++;
     vector<Node> replicas = findNodes(key);
-    for (int i = 0; i < replicas.size(); i++) {
-        // Message msg = 
-	
-    }
+  
+    Message msg_pri(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
+    Message msg_sec(g_transID,replicas[1].nodeAddress,CREATE,key,value,SECONDARY);
+    Message msg_ter(g_transID,replicas[2].nodeAddress,CREATE,key,value,TERTIARY);
+    
+    string msgStr = msg_pri.toString();
+    char* msgChar = (char*)malloc(msgStr.size());
+    
+    // send to primary
+    memcpy(msgChar,&msgStr,msgStr.size());
+    emulNet->ENsend(&memberNode->addr,&replicas[0].nodeAddress,msgChar,msgStr.size());
+    
+    // send to secondary
+    msgStr = msg_sec.toString();
+    memcpy(msgChar,&msgStr,msgStr.size());
+    emulNet->ENsend(&memberNode->addr,&replicas[1].nodeAddress,msgChar,msgStr.size());
+    
+    // send to tertiary
+    msgStr = msg_ter.toString();
+    memcpy(msgChar,&msgStr,msgStr.size());
+    emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size());
+    
+    free(msgChar);
 }
 
 /**
