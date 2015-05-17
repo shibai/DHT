@@ -111,16 +111,9 @@ void MP2Node::clientCreate(string key, string value) {
     g_transID++;
     quorum[g_transID] = 0;
     vector<Node> replicas = findNodes(key);
-  
-    Message msg_pri(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
-    string msgStr = msg_pri.toString();
-    char* msgChar = (char*)malloc(msgStr.size() + 1);
+    Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
     
-    // send to primary
-    strcpy(msgChar,msgStr.c_str());
-    emulNet->ENsend(&memberNode->addr,&replicas[0].nodeAddress,msgChar,msgStr.size() + 1);
-    
-    free(msgChar);
+    sendMsg(msg,&replicas[0].nodeAddress);
 }
 
 /**
@@ -181,6 +174,7 @@ bool MP2Node::createKeyValue(string key, string value, ReplicaType replica) {
 	 * Implement this
 	 */
 	// Insert key, value, replicaType into the hash table
+    
 }
 
 /**
@@ -271,6 +265,8 @@ void MP2Node::checkMessages() {
 	 */
 }
 
+
+
 void MP2Node::handleMsg(string message) {
     int found = message.find("::");
     int transID = stoi(message.substr(0,found));
@@ -281,55 +277,75 @@ void MP2Node::handleMsg(string message) {
     message = message.substr(found + 2);
     
     found = message.find("::");
-    int msgType = stoi(message.substr(0,found)); 
+    MessageType msgType = static_cast<MessageType>(stoi(message.substr(0,found))); 
     message = message.substr(found + 2);
     
-    switch(msgType) {
-        // create
-        case 0:
-            found = message.find("::");
-            string key = message.substr(0,found);
-            message = message.substr(found + 2);
-            
-            found = message.find("::");
-            string value = message.substr(0,found);
-            
-            int replicaType = stoi(message.substr(found + 2));
-            
-            // create secondary and tertiary
-            if (replicaType == 0) {
-                createKeyValue(key,value, static_cast<ReplicaType>(replicaType));
-                
-                vector<Node> replicas = findNodes(key); 
-  
-                Message msg_sec(transID,replicas[1].nodeAddress,CREATE,key,value,SECONDARY);
-                string msgStr = msg_sec.toString();
-                char* msgChar = (char*)malloc(msgStr.size() + 1);
-                
-                // send to secondary
-                strcpy(msgChar,msgStr.c_str());
-                emulNet->ENsend(&memberNode->addr,&replicas[1].nodeAddress,msgChar,msgStr.size() + 1);
-                
-                // send to tertiary
-                Message msg_ter(transID,replicas[2].nodeAddress,CREATE,key,value,TERTIARY);
-                msgStr = msg_ter.toString();
-                strcpy(msgChar,msgStr.c_str());
-                emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size() + 1);
-                
-                free(msgChar);
-                
-            }else if (replicaType == 1) {
-                
-            }else if (replicaType == 2) {
-                
-            }
-            
-            break;
-        // update
-      
+    if (msgType == CREATE || msgType == UPDATE) {
+        dispatchCreateUpdateMsg(message,transID,fromAddr,msgType);
+    }else if (msgType == DELETE) {
+        
+    }else if (msgType == READ) {
+        
+    }else if (msgType == REPLY) {
+        
+    }else if (msgType == READREPLY) {
+        
     }
-    
 }
+
+// wrapper for message sending
+void MP2Node::sendMsg(Message msg, Address *addr) {
+    string msgStr = msg.toString();
+    char* msgChar = (char*)malloc(msgStr.size() + 1);
+
+    strcpy(msgChar,msgStr.c_str());
+    emulNet->ENsend(&memberNode->addr,addr,msgChar,msgStr.size() + 1);
+    
+    free(msgChar);
+}
+
+// handles CREATE and UPDATE msg
+void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrStr, MessageType msgType) {
+    int found = message.find("::");
+    string key = message.substr(0,found);
+    message = message.substr(found + 2);
+            
+    found = message.find("::");
+    string value = message.substr(0,found);
+            
+    ReplicaType replicaType = static_cast<ReplicaType>(stoi(message.substr(found + 2)));
+    Address addr = Address(addrStr);
+    
+    if (msgType == CREATE) {
+        // send back a reply to master
+        Message reply(transID,addr,msgType,createKeyValue(key,value, replicaType));
+    }else if (msgType == UPDATE) {
+        
+    }
+            
+    // create secondary and tertiary
+    if (replicaType == PRIMARY) {                
+        vector<Node> replicas = findNodes(key); 
+      
+        Message msg_sec(transID,replicas[1].nodeAddress,msgType,key,value,SECONDARY);
+        string msgStr = msg_sec.toString();
+        char* msgChar = (char*)malloc(msgStr.size() + 1);
+                    
+        // send to secondary
+        strcpy(msgChar,msgStr.c_str());
+        emulNet->ENsend(&memberNode->addr,&replicas[1].nodeAddress,msgChar,msgStr.size() + 1);
+                
+        // send to tertiary
+        Message msg_ter(transID,replicas[2].nodeAddress,msgType,key,value,TERTIARY);
+        msgStr = msg_ter.toString();
+        strcpy(msgChar,msgStr.c_str());
+        emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size() + 1);
+  
+        free(msgChar);
+                
+    }
+}
+
 
 /**
  * FUNCTION NAME: findNodes

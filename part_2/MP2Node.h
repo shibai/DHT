@@ -92,6 +92,8 @@ public:
 	void stabilizationProtocol();
     
     void handleMsg(string);
+    void sendMsg(Message, Address*);
+    void dispatchCreateUpdateMsg(string, int, string, MessageType);
 
 	~MP2Node();
 };
