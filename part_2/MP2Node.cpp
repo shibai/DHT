@@ -286,7 +286,9 @@ void MP2Node::handleMsg(string message) {
     }else if (msgType == READ) {
         
     }else if (msgType == REPLY) {
-        
+        if (message == "1") {
+            // next: working on quorum
+        }
     }else if (msgType == READREPLY) {
         
     }
