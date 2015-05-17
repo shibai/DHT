@@ -90,6 +90,8 @@ public:
 
 	// stabilization protocol - handle multiple failures
 	void stabilizationProtocol();
+    
+    void handleMsg(string);
 
 	~MP2Node();
 };

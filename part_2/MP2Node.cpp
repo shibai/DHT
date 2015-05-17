@@ -114,11 +114,11 @@ void MP2Node::clientCreate(string key, string value) {
   
     Message msg_pri(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
     string msgStr = msg_pri.toString();
-    char* msgChar = (char*)malloc(msgStr.size());
+    char* msgChar = (char*)malloc(msgStr.size() + 1);
     
     // send to primary
-    memcpy(msgChar,&msgStr,msgStr.size());
-    emulNet->ENsend(&memberNode->addr,&replicas[0].nodeAddress,msgChar,msgStr.size());
+    strcpy(msgChar,msgStr.c_str());
+    emulNet->ENsend(&memberNode->addr,&replicas[0].nodeAddress,msgChar,msgStr.size() + 1);
     
     free(msgChar);
 }
@@ -261,13 +261,74 @@ void MP2Node::checkMessages() {
 		/*
 		 * Handle the message types here
 		 */
-
+        // cout << message << endl;
+        handleMsg(message);
 	}
 
 	/*
 	 * This function should also ensure all READ and UPDATE operation
 	 * get QUORUM replies
 	 */
+}
+
+void MP2Node::handleMsg(string message) {
+    int found = message.find("::");
+    int transID = stoi(message.substr(0,found));
+    message = message.substr(found + 2);
+    
+    found = message.find("::");
+    string fromAddr = message.substr(0,found);
+    message = message.substr(found + 2);
+    
+    found = message.find("::");
+    int msgType = stoi(message.substr(0,found)); 
+    message = message.substr(found + 2);
+    
+    switch(msgType) {
+        // create
+        case 0:
+            found = message.find("::");
+            string key = message.substr(0,found);
+            message = message.substr(found + 2);
+            
+            found = message.find("::");
+            string value = message.substr(0,found);
+            
+            int replicaType = stoi(message.substr(found + 2));
+            
+            // create secondary and tertiary
+            if (replicaType == 0) {
+                createKeyValue(key,value, static_cast<ReplicaType>(replicaType));
+                
+                vector<Node> replicas = findNodes(key); 
+  
+                Message msg_sec(transID,replicas[1].nodeAddress,CREATE,key,value,SECONDARY);
+                string msgStr = msg_sec.toString();
+                char* msgChar = (char*)malloc(msgStr.size() + 1);
+                
+                // send to secondary
+                strcpy(msgChar,msgStr.c_str());
+                emulNet->ENsend(&memberNode->addr,&replicas[1].nodeAddress,msgChar,msgStr.size() + 1);
+                
+                // send to tertiary
+                Message msg_ter(transID,replicas[2].nodeAddress,CREATE,key,value,TERTIARY);
+                msgStr = msg_ter.toString();
+                strcpy(msgChar,msgStr.c_str());
+                emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size() + 1);
+                
+                free(msgChar);
+                
+            }else if (replicaType == 1) {
+                
+            }else if (replicaType == 2) {
+                
+            }
+            
+            break;
+        // update
+      
+    }
+    
 }
 
 /**
