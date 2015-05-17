@@ -49,7 +49,10 @@ private:
 	// Object of Log
 	Log * log;
     
-    unordered_map<int,int> quorum;
+    // <transID,replys>
+    unordered_map<int,vector<Message>> quorum;
+    // <transID,timestamp>
+    unordered_map<int,int> outgoingMsg;
 
 public:
 	MP2Node(Member *memberNode, Params *par, EmulNet *emulNet, Log *log, Address *addressOfMember);

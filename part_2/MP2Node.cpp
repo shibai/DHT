@@ -109,7 +109,8 @@ size_t MP2Node::hashFunction(string key) {
  */
 void MP2Node::clientCreate(string key, string value) {
     g_transID++;
-    quorum[g_transID] = 0;
+    quorum[g_transID] = vector<Message>();
+    outgoingMsg[g_transID] = par->getcurrtime();
     vector<Node> replicas = findNodes(key);
     Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
     
@@ -263,6 +264,12 @@ void MP2Node::checkMessages() {
 	 * This function should also ensure all READ and UPDATE operation
 	 * get QUORUM replies
 	 */
+    // loop through all keys in quorum and check for time-outs
+    for (auto it = outgoingMsg.begin(); it != outgoingMsg.end(); it++) {
+        if (par->getcurrtime() - it->second > 512) {
+            
+        }
+    }
 }
 
 
@@ -287,7 +294,11 @@ void MP2Node::handleMsg(string message) {
     }else if (msgType == READ) {
         
     }else if (msgType == REPLY) {
-        
+        if (message == "1") {
+            
+        }else {
+            
+        }
     }else if (msgType == READREPLY) {
         
     }
