@@ -1,5 +1,10 @@
 // Place your settings in this file to overwrite default and user settings.
 {
+<<<<<<< HEAD
 	"editor.tabSize": "4",
 	"editor.insertSpaces": "4"
+=======
+	"editor.insertSpaces": "4",
+	"editor.tabSize": "4"
+>>>>>>> 9a5e5daff4c93c7bfacf78fa0d24cfb060b0b6eb
 }

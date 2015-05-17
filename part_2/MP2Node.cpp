@@ -174,8 +174,8 @@ bool MP2Node::createKeyValue(string key, string value, ReplicaType replica) {
 	/*
 	 * Implement this
 	 */
-	// Insert key, value, replicaType into the hash table
-    
+	Entry entry(value,par->getcurrtime(),replica); 
+    return ht->create(key,entry.convertToString());
 }
 
 /**
@@ -272,8 +272,7 @@ void MP2Node::checkMessages() {
     }
 }
 
-
-
+// wrapper for all message types handling
 void MP2Node::handleMsg(string message) {
     int found = message.find("::");
     int transID = stoi(message.substr(0,found));
@@ -295,9 +294,7 @@ void MP2Node::handleMsg(string message) {
         
     }else if (msgType == REPLY) {
         if (message == "1") {
-            
-        }else {
-            
+
         }
     }else if (msgType == READREPLY) {
         
@@ -327,9 +324,21 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrSt
     ReplicaType replicaType = static_cast<ReplicaType>(stoi(message.substr(found + 2)));
     Address addr = Address(addrStr);
     
+    // create/update the K/V pair on local hash table and send back a reply to master
+    bool success;
     if (msgType == CREATE) {
-        // send back a reply to master
-        Message reply(transID,addr,msgType,createKeyValue(key,value, replicaType));
+        success = createKeyValue(key,value, replicaType);
+        
+        // logging
+        if (success) {
+            log->logCreateSuccess(&memberNode->addr,false,transID,key,value);
+        }else {
+            log->logCreateFail(&memberNode->addr,false,transID,key,value);
+        }
+        
+        Message reply(transID,addr,REPLY,success);
+        sendMsg(reply,&addr);
+        
     }else if (msgType == UPDATE) {
         
     }
@@ -353,7 +362,6 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrSt
         emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size() + 1);
   
         free(msgChar);
-                
     }
 }
 
