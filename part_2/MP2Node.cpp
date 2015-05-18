@@ -265,9 +265,10 @@ void MP2Node::checkMessages() {
 	 * get QUORUM replies
 	 */
     // loop through all keys in quorum and check for time-outs
-    for (auto it = outgoingMsg.begin(); it != outgoingMsg.end(); it++) {
-        if (par->getcurrtime() - it->second > 512) {
-            
+    for (auto it : outgoingMsg.end()) {
+        if (par->getcurrtime() - it.second > 512) {
+        // log fail
+        outgoingMsg.erase(it.first);
         }
     }
 }
