@@ -109,11 +109,12 @@ size_t MP2Node::hashFunction(string key) {
  */
 void MP2Node::clientCreate(string key, string value) {
     g_transID++;
+	vector<Node> replicas = findNodes(key);
+	Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
     quorum[g_transID] = vector<Message>();
-    outgoingMsg[g_transID] = par->getcurrtime();
-    vector<Node> replicas = findNodes(key);
-    Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
-    
+    outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
+   	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
+	
     sendMsg(msg,&replicas[0].nodeAddress);
 }
 
@@ -265,12 +266,21 @@ void MP2Node::checkMessages() {
 	 * get QUORUM replies
 	 */
     // loop through all keys in quorum and check for time-outs
-    for (auto it : outgoingMsg.end()) {
+    
+    for (auto it : outgoingMsgTimestamp) {
         if (par->getcurrtime() - it.second > 512) {
-        // log fail
-        outgoingMsg.erase(it.first);
+            // log fail
+            //if ()
+            //Message ms = quorum[it.first][0];
+            //cout << ms.toString() << endl;
+            //outgoingMsg.erase(it.first);
+            
+            //cout << it.first << endl;
+            // quorum.erase();
+            
         }
     }
+    
 }
 
 // wrapper for all message types handling

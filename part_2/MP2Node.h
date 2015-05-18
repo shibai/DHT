@@ -49,10 +49,12 @@ private:
 	// Object of Log
 	Log * log;
     
-    // <transID,replys>
+    // <transID,array of messages>
     unordered_map<int,vector<Message>> quorum;
+    // <transID,message>
+    unordered_map<int,Message> outgoingMsg;
     // <transID,timestamp>
-    unordered_map<int,int> outgoingMsg;
+    unordered_map<int,int> outgoingMsgTimestamp;
 
 public:
 	MP2Node(Member *memberNode, Params *par, EmulNet *emulNet, Log *log, Address *addressOfMember);
@@ -102,3 +104,5 @@ public:
 };
 
 #endif /* MP2NODE_H_ */
+
+
