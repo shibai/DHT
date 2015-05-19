@@ -147,9 +147,6 @@ void MP2Node::clientRead(string key){
  * 				3) Sends a message to the replica
  */
 void MP2Node::clientUpdate(string key, string value){
-	/*
-	 * Implement this
-	 */
     g_transID++;
 	vector<Node> replicas = findNodes(key);
 	Message msg(g_transID,memberNode->addr,UPDATE,key,value,PRIMARY);
@@ -174,9 +171,18 @@ void MP2Node::clientUpdate(string key, string value){
  * 				3) Sends a message to the replica
  */
 void MP2Node::clientDelete(string key){
-	/*
-	 * Implement this
-	 */
+	g_transID++;
+	vector<Node> replicas = findNodes(key);
+	Message msg(g_transID,memberNode->addr,DELETE,key);
+    quorum[g_transID] = vector<string>();
+    outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
+   	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
+       
+    Message msg_sec(g_transID,memberNode->addr,DELETE,key);
+	Message msg_ter(g_transID,memberNode->addr,DELETE,key);
+    sendMsg(msg,&replicas[0].nodeAddress);
+    sendMsg(msg_sec,&replicas[1].nodeAddress);
+    sendMsg(msg_ter,&replicas[2].nodeAddress);
 }
 
 /**
@@ -229,10 +235,7 @@ bool MP2Node::updateKeyValue(string key, string value, ReplicaType replica) {
  * 				2) Return true or false based on success or failure
  */
 bool MP2Node::deletekey(string key) {
-	/*
-	 * Implement this
-	 */
-	// Delete the key from the local hash table
+	return ht->deleteKey(key);
 }
 
 /**
@@ -267,6 +270,7 @@ void MP2Node::checkMessages() {
 		/*
 		 * Handle the message types here
 		 */
+        message.pop_back(); // delete last space
         handleMsg(message);
 	}
 
@@ -280,9 +284,10 @@ void MP2Node::checkMessages() {
             }else if (static_cast<MessageType>(msg.type) == READ) {
                 
             }else if (static_cast<MessageType>(msg.type) == UPDATE) {
-                
-            }
-            
+                log->logUpdateFail(&memberNode->addr,true,it.first,msg.key,msg.value);
+            }else if (static_cast<MessageType>(msg.type) == DELETE) {
+                log->logDeleteFail(&memberNode->addr,true,it.first,msg.key);
+            }   
         }
     }
     
@@ -303,59 +308,18 @@ void MP2Node::handleMsg(string message) {
     MessageType msgType = static_cast<MessageType>(stoi(message.substr(0,found))); 
     message = message.substr(found + 2);
 
+    //cout << message.length() << endl;
+
     if (msgType == CREATE || msgType == UPDATE) {
         dispatchCreateUpdateMsg(message,transID,fromAddr,msgType);
     }else if (msgType == DELETE) {
-        
+        dispatchDeleteMsg(message,transID,fromAddr);
     }else if (msgType == READ) {
         
     }else if (msgType == REPLY) {
         handlesReply(originalMsg,message,transID);
     }else if (msgType == READREPLY) {
         
-    }
-}
-
-// handles reply messages
-void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
-    quorum[transID].push_back(originalMsg);
-    // if all replies have been received
-    if (quorum[transID].size() == 3) {
-        int vote = 0;
-        
-        for (int i = 0; i < quorum[transID].size(); i++) {
-            if (stoi(leftMsg) == 1) {
-                vote++;
-            }
-        }
-        
-        Message outgoingMessage = outgoingMsg.at(transID);
-        if (vote > 2) {
-            if (outgoingMessage.type == CREATE) {
-                log->logCreateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == UPDATE) {
-                log->logUpdateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == READ) {
-                
-            }else if (outgoingMessage.type == DELETE) {
-                
-            }
-        }else {
-            if (outgoingMessage.type == CREATE) {
-                log->logCreateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == UPDATE) {
-                log->logUpdateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == READ) {
-                
-            }else if (outgoingMessage.type == DELETE) {
-                
-            }
-        }
-        
-        // close this transaction
-        quorum.erase(transID);
-        outgoingMsg.erase(transID);
-        outgoingMsgTimestamp.erase(transID);
     }
 }
 
@@ -369,6 +333,65 @@ void MP2Node::sendMsg(Message msg, Address *toAddr) {
     
     free(msgChar);
 }
+
+// handles reply messages
+void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
+    quorum[transID].push_back(originalMsg);
+    // if all replies have been received
+    if (quorum[transID].size() == 3) {
+        int vote = 0;
+        
+        for (int i = 0; i < quorum[transID].size(); i++) {
+            if (leftMsg == "1") {
+                vote++;
+            }
+        }
+        
+        Message outgoingMessage = outgoingMsg.at(transID);
+        if (vote > 2) {
+            if (outgoingMessage.type == CREATE) {
+                log->logCreateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == UPDATE) {
+                log->logUpdateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == READ) {
+                
+            }else if (outgoingMessage.type == DELETE) {
+                log->logDeleteSuccess(&memberNode->addr,true,transID,outgoingMessage.key);
+            }
+        }else {
+            if (outgoingMessage.type == CREATE) {
+                log->logCreateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == UPDATE) {
+                log->logUpdateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == READ) {
+                
+            }else if (outgoingMessage.type == DELETE) {
+                log->logDeleteFail(&memberNode->addr,true,transID,outgoingMessage.key);
+            }
+        }
+        
+        // close this transaction
+        quorum.erase(transID);
+        outgoingMsg.erase(transID);
+        outgoingMsgTimestamp.erase(transID);
+    }
+}
+
+// handles DELETE msg
+void MP2Node::dispatchDeleteMsg(string key, int transID, string masterAddrStr) {
+    Address masterAddr = Address(masterAddrStr);
+    bool success = deletekey(key);
+    
+    if (success) {
+        log->logDeleteSuccess(&memberNode->addr,false,transID,key);
+    }else {
+        log->logDeleteFail(&memberNode->addr,false,transID,key);
+    }
+    
+    Message reply(transID,memberNode->addr,REPLY,success);
+    sendMsg(reply,&masterAddr);
+}
+
 
 // handles CREATE and UPDATE msg
 void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string masterAddrStr, MessageType msgType) {
