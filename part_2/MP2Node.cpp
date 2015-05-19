@@ -110,12 +110,16 @@ size_t MP2Node::hashFunction(string key) {
 void MP2Node::clientCreate(string key, string value) {
     g_transID++;
 	vector<Node> replicas = findNodes(key);
-	Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
+	Message msg(g_transID,memberNode->addr,CREATE,key,value,PRIMARY);
     quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
    	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
-	
+       
+    Message msg_sec(g_transID,memberNode->addr,CREATE,key,value,SECONDARY);
+	Message msg_ter(g_transID,memberNode->addr,CREATE,key,value,TERTIARY);
     sendMsg(msg,&replicas[0].nodeAddress);
+    sendMsg(msg_sec,&replicas[1].nodeAddress);
+    sendMsg(msg_ter,&replicas[2].nodeAddress);
 }
 
 /**
@@ -293,7 +297,7 @@ void MP2Node::handleMsg(string message) {
     found = message.find("::");
     MessageType msgType = static_cast<MessageType>(stoi(message.substr(0,found))); 
     message = message.substr(found + 2);
-    
+
     if (msgType == CREATE || msgType == UPDATE) {
         dispatchCreateUpdateMsg(message,transID,fromAddr,msgType);
     }else if (msgType == DELETE) {
@@ -308,15 +312,15 @@ void MP2Node::handleMsg(string message) {
     }
 }
 
+// handles reply messages
 void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
     quorum[transID].push_back(originalMsg);
-    cout << quorum[transID].size() << "---";
-        // all replies have been received
+    // if all replies have been received
     if (quorum[transID].size() == 3) {
         int vote = 0;
+        
         for (int i = 0; i < quorum[transID].size(); i++) {
-            cout << leftMsg << endl;
-            if (leftMsg == "::1") {
+            if (stoi(leftMsg) == 1) {
                 vote++;
             }
         }
@@ -349,21 +353,22 @@ void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
         outgoingMsg.erase(transID);
         outgoingMsgTimestamp.erase(transID);
     }
+    // cout << quorum[transID].size() << "---";
 }
 
 // wrapper for message sending
-void MP2Node::sendMsg(Message msg, Address *addr) {
+void MP2Node::sendMsg(Message msg, Address *toAddr) {
     string msgStr = msg.toString();
     char* msgChar = (char*)malloc(msgStr.size() + 1);
 
     strcpy(msgChar,msgStr.c_str());
-    emulNet->ENsend(&memberNode->addr,addr,msgChar,msgStr.size() + 1);
+    emulNet->ENsend(&memberNode->addr,toAddr,msgChar,msgStr.size() + 1);
     
     free(msgChar);
 }
 
 // handles CREATE and UPDATE msg
-void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrStr, MessageType msgType) {
+void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string masterAddrStr, MessageType msgType) {
     int found = message.find("::");
     string key = message.substr(0,found);
     message = message.substr(found + 2);
@@ -372,8 +377,8 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrSt
     string value = message.substr(0,found);
             
     ReplicaType replicaType = static_cast<ReplicaType>(stoi(message.substr(found + 2)));
-    Address addr = Address(addrStr);
-    
+    Address masterAddr = Address(masterAddrStr);
+   // cout << masterAddrStr << "---";
     // create/update the K/V pair on local hash table and send back a reply to master
     bool success;
     if (msgType == CREATE) {
@@ -386,32 +391,12 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string addrSt
             log->logCreateFail(&memberNode->addr,false,transID,key,value);
         }
         
-        Message reply(transID,addr,REPLY,success);
-        sendMsg(reply,&addr);
+        Message reply(transID,memberNode->addr,REPLY,success);
+       
+        sendMsg(reply,&masterAddr);
         
     }else if (msgType == UPDATE) {
         
-    }
-            
-    // create secondary and tertiary
-    if (replicaType == PRIMARY) {                
-        vector<Node> replicas = findNodes(key); 
-      
-        Message msg_sec(transID,replicas[1].nodeAddress,msgType,key,value,SECONDARY);
-        string msgStr = msg_sec.toString();
-        char* msgChar = (char*)malloc(msgStr.size() + 1);
-                    
-        // send to secondary
-        strcpy(msgChar,msgStr.c_str());
-        emulNet->ENsend(&memberNode->addr,&replicas[1].nodeAddress,msgChar,msgStr.size() + 1);
-                
-        // send to tertiary
-        Message msg_ter(transID,replicas[2].nodeAddress,msgType,key,value,TERTIARY);
-        msgStr = msg_ter.toString();
-        strcpy(msgChar,msgStr.c_str());
-        emulNet->ENsend(&memberNode->addr,&replicas[2].nodeAddress,msgChar,msgStr.size() + 1);
-  
-        free(msgChar);
     }
 }
 
