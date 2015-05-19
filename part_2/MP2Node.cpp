@@ -150,6 +150,18 @@ void MP2Node::clientUpdate(string key, string value){
 	/*
 	 * Implement this
 	 */
+    g_transID++;
+	vector<Node> replicas = findNodes(key);
+	Message msg(g_transID,memberNode->addr,UPDATE,key,value,PRIMARY);
+    quorum[g_transID] = vector<string>();
+    outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
+   	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
+       
+    Message msg_sec(g_transID,memberNode->addr,UPDATE,key,value,SECONDARY);
+	Message msg_ter(g_transID,memberNode->addr,UPDATE,key,value,TERTIARY);
+    sendMsg(msg,&replicas[0].nodeAddress);
+    sendMsg(msg_sec,&replicas[1].nodeAddress);
+    sendMsg(msg_ter,&replicas[2].nodeAddress);
 }
 
 /**
@@ -176,9 +188,6 @@ void MP2Node::clientDelete(string key){
  * 			   	2) Return true or false based on success or failure
  */
 bool MP2Node::createKeyValue(string key, string value, ReplicaType replica) {
-	/*
-	 * Implement this
-	 */
 	Entry entry(value,par->getcurrtime(),replica); 
     return ht->create(key,entry.convertToString());
 }
@@ -207,10 +216,8 @@ string MP2Node::readKey(string key) {
  * 				2) Return true or false based on success or failure
  */
 bool MP2Node::updateKeyValue(string key, string value, ReplicaType replica) {
-	/*
-	 * Implement this
-	 */
-	// Update key in local hash table and return true or false
+    Entry entry(value,par->getcurrtime(),replica); 
+    return ht->update(key,entry.convertToString());
 }
 
 /**
@@ -257,11 +264,9 @@ void MP2Node::checkMessages() {
 		memberNode->mp2q.pop();
 
 		string message(data, data + size);
-
 		/*
 		 * Handle the message types here
 		 */
-        // cout << message << endl;
         handleMsg(message);
 	}
 
@@ -306,7 +311,6 @@ void MP2Node::handleMsg(string message) {
         
     }else if (msgType == REPLY) {
         handlesReply(originalMsg,message,transID);
-        
     }else if (msgType == READREPLY) {
         
     }
@@ -330,7 +334,7 @@ void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
             if (outgoingMessage.type == CREATE) {
                 log->logCreateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == UPDATE) {
-                
+                log->logUpdateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == READ) {
                 
             }else if (outgoingMessage.type == DELETE) {
@@ -340,7 +344,7 @@ void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
             if (outgoingMessage.type == CREATE) {
                 log->logCreateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == UPDATE) {
-                
+                log->logUpdateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == READ) {
                 
             }else if (outgoingMessage.type == DELETE) {
@@ -353,7 +357,6 @@ void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
         outgoingMsg.erase(transID);
         outgoingMsgTimestamp.erase(transID);
     }
-    // cout << quorum[transID].size() << "---";
 }
 
 // wrapper for message sending
@@ -378,7 +381,7 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string master
             
     ReplicaType replicaType = static_cast<ReplicaType>(stoi(message.substr(found + 2)));
     Address masterAddr = Address(masterAddrStr);
-   // cout << masterAddrStr << "---";
+    
     // create/update the K/V pair on local hash table and send back a reply to master
     bool success;
     if (msgType == CREATE) {
@@ -390,14 +393,18 @@ void MP2Node::dispatchCreateUpdateMsg(string message, int transID, string master
         }else {
             log->logCreateFail(&memberNode->addr,false,transID,key,value);
         }
-        
-        Message reply(transID,memberNode->addr,REPLY,success);
-       
-        sendMsg(reply,&masterAddr);
-        
     }else if (msgType == UPDATE) {
+        success = updateKeyValue(key,value, replicaType);
         
+        // logging
+        if (success) {
+            log->logUpdateSuccess(&memberNode->addr,false,transID,key,value);
+        }else {
+            log->logUpdateFail(&memberNode->addr,false,transID,key,value);
+        }
     }
+    Message reply(transID,memberNode->addr,REPLY,success);
+    sendMsg(reply,&masterAddr);
 }
 
 
