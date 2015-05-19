@@ -50,7 +50,7 @@ private:
 	Log * log;
     
     // <transID,array of messages>
-    unordered_map<int,vector<Message>> quorum;
+    unordered_map<int,vector<string> > quorum;
     // <transID,message>
     unordered_map<int,Message> outgoingMsg;
     // <transID,timestamp>
@@ -99,6 +99,7 @@ public:
     void handleMsg(string);
     void sendMsg(Message, Address*);
     void dispatchCreateUpdateMsg(string, int, string, MessageType);
+    void handlesReply(string,string,int);
 
 	~MP2Node();
 };

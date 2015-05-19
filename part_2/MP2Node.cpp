@@ -111,7 +111,7 @@ void MP2Node::clientCreate(string key, string value) {
     g_transID++;
 	vector<Node> replicas = findNodes(key);
 	Message msg(g_transID,replicas[0].nodeAddress,CREATE,key,value,PRIMARY);
-    quorum[g_transID] = vector<Message>();
+    quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
    	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
 	
@@ -261,22 +261,18 @@ void MP2Node::checkMessages() {
         handleMsg(message);
 	}
 
-	/*
-	 * This function should also ensure all READ and UPDATE operation
-	 * get QUORUM replies
-	 */
-    // loop through all keys in quorum and check for time-outs
-    
+    // loop through all keys in quorum and check for time-outs    
     for (auto it : outgoingMsgTimestamp) {
         if (par->getcurrtime() - it.second > 512) {
-            // log fail
-            //if ()
-            //Message ms = quorum[it.first][0];
-            //cout << ms.toString() << endl;
-            //outgoingMsg.erase(it.first);
-            
-            //cout << it.first << endl;
-            // quorum.erase();
+			// get type of mesg
+            Message msg = outgoingMsg.at(it.first);
+			if (static_cast<MessageType>(msg.type) == CREATE) {
+				log->logCreateFail(&memberNode->addr,true,it.first,msg.key,msg.value);
+            }else if (static_cast<MessageType>(msg.type) == READ) {
+                
+            }else if (static_cast<MessageType>(msg.type) == UPDATE) {
+                
+            }
             
         }
     }
@@ -285,6 +281,7 @@ void MP2Node::checkMessages() {
 
 // wrapper for all message types handling
 void MP2Node::handleMsg(string message) {
+    string originalMsg = message;
     int found = message.find("::");
     int transID = stoi(message.substr(0,found));
     message = message.substr(found + 2);
@@ -304,11 +301,53 @@ void MP2Node::handleMsg(string message) {
     }else if (msgType == READ) {
         
     }else if (msgType == REPLY) {
-        if (message == "1") {
-
-        }
+        handlesReply(originalMsg,message,transID);
+        
     }else if (msgType == READREPLY) {
         
+    }
+}
+
+void MP2Node::handlesReply(string originalMsg, string leftMsg,int transID) {
+    quorum[transID].push_back(originalMsg);
+    cout << quorum[transID].size() << "---";
+        // all replies have been received
+    if (quorum[transID].size() == 3) {
+        int vote = 0;
+        for (int i = 0; i < quorum[transID].size(); i++) {
+            cout << leftMsg << endl;
+            if (leftMsg == "::1") {
+                vote++;
+            }
+        }
+        
+        Message outgoingMessage = outgoingMsg.at(transID);
+        if (vote > 2) {
+            if (outgoingMessage.type == CREATE) {
+                log->logCreateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == UPDATE) {
+                
+            }else if (outgoingMessage.type == READ) {
+                
+            }else if (outgoingMessage.type == DELETE) {
+                
+            }
+        }else {
+            if (outgoingMessage.type == CREATE) {
+                log->logCreateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
+            }else if (outgoingMessage.type == UPDATE) {
+                
+            }else if (outgoingMessage.type == READ) {
+                
+            }else if (outgoingMessage.type == DELETE) {
+                
+            }
+        }
+        
+        // close this transaction
+        quorum.erase(transID);
+        outgoingMsg.erase(transID);
+        outgoingMsgTimestamp.erase(transID);
     }
 }
 
