@@ -98,9 +98,11 @@ public:
     
     void handleMsg(string);
     void sendMsg(Message, Address*);
-    void dispatchCreateUpdateMsg(string, int, string, MessageType);
-    void dispatchDeleteMsg(string, int, string);
-    void handlesReply(string,string,int);
+    void createUpdateMsgHandler(string, int, string, MessageType);
+    void deleteMsgHandler(string, int, string);
+    void replyMsgHandler(string,string,int);
+    void readMsgHandler(string,int,string);
+    void readReplyMsgHandler(string,string,int);
 
 	~MP2Node();
 };
