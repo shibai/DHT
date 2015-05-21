@@ -35,9 +35,6 @@ MP2Node::~MP2Node() {
  * 				3) Calls the Stabilization Protocol
  */
 void MP2Node::updateRing() {
-	/*
-	 * Implement this. Parts of it are already implemented
-	 */
 	vector<Node> curMemList;
 	bool change = false;
 
@@ -256,10 +253,6 @@ void MP2Node::checkMessages() {
 	char * data;
 	int size;
 
-	/*
-	 * Declare your local variables here
-	 */
-
 	// dequeue all messages and handle them
 	while ( !memberNode->mp2q.empty() ) {
 		/*
@@ -337,6 +330,7 @@ void MP2Node::sendMsg(Message msg, Address *toAddr) {
     free(msgChar);
 }
 
+// handles READREPLY messages
 void MP2Node::readReplyMsgHandler(string originalMsg, string value, int transID) {
     quorum[transID].push_back(originalMsg);
     if (quorum[transID].size() == 3) {
