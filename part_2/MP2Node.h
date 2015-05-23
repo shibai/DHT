@@ -96,6 +96,7 @@ public:
 	// stabilization protocol - handle multiple failures
 	void stabilizationProtocol();
     
+    void populateNeighborNodes();
     void handleMsg(string);
     void sendMsg(Message, Address*);
     void createUpdateMsgHandler(string, int, string, MessageType);

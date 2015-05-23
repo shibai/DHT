@@ -48,12 +48,38 @@ void MP2Node::updateRing() {
 	 */
 	// Sort the list based on the hashCode
 	sort(curMemList.begin(), curMemList.end());
+    
+    hasMyReplicas.clear();
+    haveReplicasOf.clear();
+    // check the ring in last round
+    if (ring.size() > 0) {
+        populateNeighborNodes();
+    }
+    
     ring = curMemList;
 
 	/*
 	 * Step 3: Run the stabilization protocol IF REQUIRED
 	 */
 	// Run stabilization protocol if the hash table size is greater than zero and if there has been a changed in the ring
+    stabilizationProtocol();
+}
+
+// update hasMyReplicas and haveReplicasOf
+void MP2Node::populateNeighborNodes() {
+    int curHash = hashFunction(memberNode->addr.addr);
+    int i;
+    for (i = 0; i < ring.size(); i++) {
+        if (curHash == ring.at(i).getHashCode()) {
+            break;
+        }
+    }
+    
+    hasMyReplicas.push_back(ring.at((i + 1) % ring.size()));
+    hasMyReplicas.push_back(ring.at((i + 2) % ring.size()));
+    
+    haveReplicasOf.push_back( ring.at((i - 2 + ring.size()) % ring.size()) );
+    haveReplicasOf.push_back(ring.at((i - 1 + ring.size()) % ring.size()));   
 }
 
 /**
