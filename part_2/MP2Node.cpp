@@ -56,13 +56,14 @@ void MP2Node::updateRing() {
         populateNeighborNodes();
     }
     
+    // assign the current ring
     ring = curMemList;
 
 	/*
 	 * Step 3: Run the stabilization protocol IF REQUIRED
 	 */
 	// Run stabilization protocol if the hash table size is greater than zero and if there has been a changed in the ring
-    stabilizationProtocol();
+    if (ring.size() > 0 && ht->currentSize() > 0) stabilizationProtocol();
 }
 
 // update hasMyReplicas and haveReplicasOf
@@ -551,4 +552,40 @@ void MP2Node::stabilizationProtocol() {
 	/*
 	 * Implement this
 	 */
+    int curHash = hashFunction(memberNode->addr.addr);
+    int i;
+    for (i = 0; i < ring.size(); i++) {
+        if (curHash == ring.at(i).getHashCode()) {
+            break;
+        }
+    }
+    
+    int pre1 = ( ring.at( ((i - 2 + ring.size()) % ring.size()) ) ).getHashCode();
+    int pre2 = ( ring.at( ((i - 1 + ring.size()) % ring.size()) ) ).getHashCode();
+    int post1 = (ring.at((i + 1) % ring.size())).getHashCode();
+    int post2 = (ring.at((i + 2) % ring.size())).getHashCode();
+    
+    /*
+     * pre1 - pre2 - currentNode - post1 - post2   
+     *
+     *
+     */ 
+     
+    // old pre1 fails
+    if (pre1 != haveReplicasOf[0].getHashCode() && pre2 == haveReplicasOf[1].getHashCode()) {
+        // promte current secondary to primary
+        // and send msg to post1 to promote tertiary to secondary
+        // send msg to post2 to create tertiary
+       // for (auto it : ht->hashTable) {
+            
+        //}
+    }
+    // old pre2 fails
+    else if (pre1 == haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
+        
+    }
+    // both old pre1 and old pre2 fail
+    else if (pre1 != haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
+        
+    }
 }
