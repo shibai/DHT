@@ -104,7 +104,7 @@ public:
     void replyMsgHandler(string,string,int);
     void readMsgHandler(string,int,string);
     void readReplyMsgHandler(string,string,int);
-
+    void getValueAndReplicaType(string,string &,int &);
 	~MP2Node();
 };
 

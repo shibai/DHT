@@ -133,14 +133,14 @@ size_t MP2Node::hashFunction(string key) {
  */
 void MP2Node::clientCreate(string key, string value) {
     g_transID++;
-	vector<Node> replicas = findNodes(key);
-	Message msg(g_transID,memberNode->addr,CREATE,key,value,PRIMARY);
+    vector<Node> replicas = findNodes(key);
+    Message msg(g_transID,memberNode->addr,CREATE,key,value,PRIMARY);
     quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
-   	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
+    outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
        
     Message msg_sec(g_transID,memberNode->addr,CREATE,key,value,SECONDARY);
-	Message msg_ter(g_transID,memberNode->addr,CREATE,key,value,TERTIARY);
+    Message msg_ter(g_transID,memberNode->addr,CREATE,key,value,TERTIARY);
     sendMsg(msg,&replicas[0].nodeAddress);
     sendMsg(msg_sec,&replicas[1].nodeAddress);
     sendMsg(msg_ter,&replicas[2].nodeAddress);
@@ -157,8 +157,8 @@ void MP2Node::clientCreate(string key, string value) {
  */
 void MP2Node::clientRead(string key){
     g_transID++;
-	vector<Node> replicas = findNodes(key);
-	Message msg(g_transID,memberNode->addr,READ,key);
+    vector<Node> replicas = findNodes(key);
+    Message msg(g_transID,memberNode->addr,READ,key);
     quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
    	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
@@ -180,14 +180,14 @@ void MP2Node::clientRead(string key){
  */
 void MP2Node::clientUpdate(string key, string value){
     g_transID++;
-	vector<Node> replicas = findNodes(key);
-	Message msg(g_transID,memberNode->addr,UPDATE,key,value,PRIMARY);
+    vector<Node> replicas = findNodes(key);
+    Message msg(g_transID,memberNode->addr,UPDATE,key,value,PRIMARY);
     quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
    	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
        
     Message msg_sec(g_transID,memberNode->addr,UPDATE,key,value,SECONDARY);
-	Message msg_ter(g_transID,memberNode->addr,UPDATE,key,value,TERTIARY);
+    Message msg_ter(g_transID,memberNode->addr,UPDATE,key,value,TERTIARY);
     sendMsg(msg,&replicas[0].nodeAddress);
     sendMsg(msg_sec,&replicas[1].nodeAddress);
     sendMsg(msg_ter,&replicas[2].nodeAddress);
@@ -203,9 +203,9 @@ void MP2Node::clientUpdate(string key, string value){
  * 				3) Sends a message to the replica
  */
 void MP2Node::clientDelete(string key){
-	g_transID++;
-	vector<Node> replicas = findNodes(key);
-	Message msg(g_transID,memberNode->addr,DELETE,key);
+    g_transID++;
+    vector<Node> replicas = findNodes(key);
+    Message msg(g_transID,memberNode->addr,DELETE,key);
     quorum[g_transID] = vector<string>();
     outgoingMsgTimestamp[g_transID] = par->getcurrtime(); 
    	outgoingMsg.emplace(g_transID,msg); // attention!!! opertor[] would result in compile-error 
@@ -224,7 +224,7 @@ void MP2Node::clientDelete(string key){
  * 			   	2) Return true or false based on success or failure
  */
 bool MP2Node::createKeyValue(string key, string value, ReplicaType replica) {
-	Entry entry(value,par->getcurrtime(),replica); 
+    Entry entry(value,par->getcurrtime(),replica); 
     return ht->create(key,entry.convertToString());
 }
 
@@ -237,7 +237,7 @@ bool MP2Node::createKeyValue(string key, string value, ReplicaType replica) {
  * 			    2) Return value
  */
 string MP2Node::readKey(string key) {
-	return ht->read(key);
+    return ht->read(key);
 }
 
 /**
@@ -331,8 +331,6 @@ void MP2Node::handleMsg(string message) {
     MessageType msgType = static_cast<MessageType>(stoi(message.substr(0,found))); 
     message = message.substr(found + 2);
 
-    //cout << message.length() << endl;
-
     if (msgType == CREATE || msgType == UPDATE) {
         createUpdateMsgHandler(message,transID,fromAddr,msgType);
     }else if (msgType == DELETE) {
@@ -388,7 +386,10 @@ void MP2Node::readMsgHandler(string key,int transID,string masterAddrStr) {
 
 // handles REPLY messages
 void MP2Node::replyMsgHandler(string originalMsg, string leftMsg,int transID) {
-    quorum[transID].push_back(originalMsg);
+    if (transID != 0) {
+        quorum[transID].push_back(originalMsg);
+    }
+    
     // if all replies have been received
     if (quorum[transID].size() == 3) {
         int vote = 0;
@@ -549,9 +550,6 @@ int MP2Node::enqueueWrapper(void *env, char *buff, int size) {
  *				Note:- "CORRECT" replicas implies that every key is replicated in its two neighboring nodes in the ring
  */
 void MP2Node::stabilizationProtocol() {
-	/*
-	 * Implement this
-	 */
     int curHash = hashFunction(memberNode->addr.addr);
     int i;
     for (i = 0; i < ring.size(); i++) {
@@ -573,19 +571,60 @@ void MP2Node::stabilizationProtocol() {
      
     // old pre1 fails
     if (pre1 != haveReplicasOf[0].getHashCode() && pre2 == haveReplicasOf[1].getHashCode()) {
+        
+    }
+    // old pre2 fails
+    // promote secondary to primary locally
+    else if (pre1 == haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
         // promte current secondary to primary
         // and send msg to post1 to promote tertiary to secondary
         // send msg to post2 to create tertiary
-       // for (auto it : ht->hashTable) {
+        for (auto it : ht->hashTable) {
+            string value;
+            int replicaType;
+            getValueAndReplicaType(it.second,value,replicaType);
             
-        //}
+            if (static_cast<ReplicaType>(replicaType) == SECONDARY) {
+                
+                updateKeyValue(it.first,value,PRIMARY);
+                
+                // send to next two availiable nodes 
+                Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
+                Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
+                
+                sendMsg(msg_sec,&(hasMyReplicas[0].nodeAddress));
+                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
+            }
+        }
     }
-    // old pre2 fails
-    else if (pre1 == haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
-        
-    }
+    
     // both old pre1 and old pre2 fail
+    // promote both secondary and tertiary to primary locally
     else if (pre1 != haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
-        
+        for (auto it : ht->hashTable) {
+            string value;
+            int replicaType;
+            getValueAndReplicaType(it.second,value,replicaType);
+            
+            if (static_cast<ReplicaType>(replicaType) == SECONDARY) {
+                updateKeyValue(it.first,value,PRIMARY);
+                //promoteTerToSec();
+                // create ter
+            }
+            if (static_cast<ReplicaType>(replicaType) == TERTIARY) {
+                updateKeyValue(it.first,value,PRIMARY);
+                // create sec
+                // create ter
+            }
+        }
     }
+}
+
+void MP2Node::getValueAndReplicaType(string str, string &value, int &replicaType) {
+    int found = str.find(":");
+    value = str.substr(0,found);
+    str = str.substr(found + 1);
+            
+    found = str.find(":");
+    replicaType = stoi(str.substr(found + 1));
 }
