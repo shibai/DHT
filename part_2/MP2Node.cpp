@@ -63,7 +63,7 @@ void MP2Node::updateRing() {
 	 * Step 3: Run the stabilization protocol IF REQUIRED
 	 */
 	// Run stabilization protocol if the hash table size is greater than zero and if there has been a changed in the ring
-    if (ring.size() > 0 && ht->currentSize() > 0) stabilizationProtocol();
+    //if (ring.size() > 0 && ht->currentSize() > 0) stabilizationProtocol();
 }
 
 // update hasMyReplicas and haveReplicasOf
@@ -296,10 +296,11 @@ void MP2Node::checkMessages() {
         message.pop_back(); // delete last space
         handleMsg(message);
 	}
-
+    
+    // clean up
     // loop through all keys in quorum and check for time-outs    
     for (auto it : outgoingMsgTimestamp) {
-        if (par->getcurrtime() - it.second > 512) {
+        if (par->getcurrtime() - it.second > 10) {
 			// get type of msg
             Message msg = outgoingMsg.at(it.first);
 			if (static_cast<MessageType>(msg.type) == CREATE) {
@@ -310,7 +311,11 @@ void MP2Node::checkMessages() {
                 log->logUpdateFail(&memberNode->addr,true,it.first,msg.key,msg.value);
             }else if (static_cast<MessageType>(msg.type) == DELETE) {
                 log->logDeleteFail(&memberNode->addr,true,it.first,msg.key);
-            }   
+            }
+            
+            quorum.erase(it.first);
+            outgoingMsg.erase(it.first);
+            outgoingMsgTimestamp.erase(it.first);
         }
     }
     
@@ -358,7 +363,7 @@ void MP2Node::sendMsg(Message msg, Address *toAddr) {
 // handles READREPLY messages
 void MP2Node::readReplyMsgHandler(string originalMsg, string value, int transID) {
     quorum[transID].push_back(originalMsg);
-    if (quorum[transID].size() == 3) {
+    if (quorum[transID].size() >= 2) {
         Message outgoingMessage = outgoingMsg.at(transID);
         log->logReadSuccess(&memberNode->addr,true,transID,outgoingMessage.key,value);
         
@@ -391,7 +396,7 @@ void MP2Node::replyMsgHandler(string originalMsg, string leftMsg,int transID) {
     }
     
     // if all replies have been received
-    if (quorum[transID].size() == 3) {
+    if (quorum[transID].size() >= 2) {
         int vote = 0;
         
         for (int i = 0; i < quorum[transID].size(); i++) {
@@ -401,23 +406,20 @@ void MP2Node::replyMsgHandler(string originalMsg, string leftMsg,int transID) {
         }
         
         Message outgoingMessage = outgoingMsg.at(transID);
-        if (vote > 2) {
+        if (vote >= 2) {
             if (outgoingMessage.type == CREATE) {
                 log->logCreateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == UPDATE) {
-                log->logUpdateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == READ) {
-                
+                log->logUpdateSuccess(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value); 
             }else if (outgoingMessage.type == DELETE) {
                 log->logDeleteSuccess(&memberNode->addr,true,transID,outgoingMessage.key);
             }
         }else {
+            log->LOG(&memberNode->addr,"outgoingMessage.type");
             if (outgoingMessage.type == CREATE) {
                 log->logCreateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
             }else if (outgoingMessage.type == UPDATE) {
                 log->logUpdateFail(&memberNode->addr,true,transID,outgoingMessage.key,outgoingMessage.value);
-            }else if (outgoingMessage.type == READ) {
-                
             }else if (outgoingMessage.type == DELETE) {
                 log->logDeleteFail(&memberNode->addr,true,transID,outgoingMessage.key);
             }
@@ -585,8 +587,11 @@ void MP2Node::stabilizationProtocol() {
             getValueAndReplicaType(it.second,value,replicaType);
             
             if (static_cast<ReplicaType>(replicaType) == SECONDARY) {
-                
-                updateKeyValue(it.first,value,PRIMARY);
+                if (updateKeyValue(it.first,value,PRIMARY)) {
+                    log->logUpdateSuccess(&memberNode->addr,true,0,it.first,value);
+                }else {
+                    log->logUpdateFail(&memberNode->addr,true,0,it.first,value);
+                }
                 
                 // send to next two availiable nodes 
                 Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
@@ -607,14 +612,33 @@ void MP2Node::stabilizationProtocol() {
             getValueAndReplicaType(it.second,value,replicaType);
             
             if (static_cast<ReplicaType>(replicaType) == SECONDARY) {
-                updateKeyValue(it.first,value,PRIMARY);
+                if (updateKeyValue(it.first,value,PRIMARY)) {
+                    log->logUpdateSuccess(&memberNode->addr,true,0,it.first,value);
+                }else {
+                    log->logUpdateFail(&memberNode->addr,true,0,it.first,value);
+                }
                 //promoteTerToSec();
                 // create ter
+                // send to next two availiable nodes 
+                Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
+                Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
+                
+                sendMsg(msg_sec,&(hasMyReplicas[0].nodeAddress));
+                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
             }
             if (static_cast<ReplicaType>(replicaType) == TERTIARY) {
-                updateKeyValue(it.first,value,PRIMARY);
-                // create sec
-                // create ter
+                if (updateKeyValue(it.first,value,PRIMARY)) {
+                    log->logUpdateSuccess(&memberNode->addr,true,0,it.first,value);
+                }else {
+                    log->logUpdateFail(&memberNode->addr,true,0,it.first,value);
+                }
+                
+                // send to next two availiable nodes 
+                Message msg_sec(0,memberNode->addr,CREATE,it.first,value,SECONDARY);
+                Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
+                
+                sendMsg(msg_sec,&(hasMyReplicas[0].nodeAddress));
+                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
             }
         }
     }
