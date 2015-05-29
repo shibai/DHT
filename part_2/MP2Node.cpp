@@ -562,25 +562,31 @@ void MP2Node::stabilizationProtocol() {
         }
     }
     
-    int pre1 = ( ring.at( ((i - 2 + ring.size()) % ring.size()) ) ).getHashCode();
-    int pre2 = ( ring.at( ((i - 1 + ring.size()) % ring.size()) ) ).getHashCode();
-    int post1 = (ring.at((i + 1) % ring.size())).getHashCode();
-    int post2 = (ring.at((i + 2) % ring.size())).getHashCode();
+    Node pre1 = ring.at( ((i - 2 + ring.size()) % ring.size()) );
+    Node pre2 = ring.at( ((i - 1 + ring.size()) % ring.size()) );
+    Node post1 = ring.at((i + 1) % ring.size());
+    Node post2 = ring.at((i + 2) % ring.size());
     
     /*
-     * pre1 - pre2 - currentNode - post1 - post2   
-     *
+     * Topology:   
+     * pre1 - pre2 - currentNode - post1 - post2
      *
      */ 
-     
+     string a = "";
+     for (int i = 0; i < ring.size(); i++) {
+         a += ring[i].nodeAddress.getAddress() + " ";
+     }
+     const char * s = a.c_str();
     // old pre1 fails
-    if (pre1 != haveReplicasOf[0].getHashCode() && pre2 == haveReplicasOf[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"pre 1");
+    if (pre1.getHashCode() != haveReplicasOf[0].getHashCode() && pre2.getHashCode() == haveReplicasOf[1].getHashCode()) {
+        s = ("pre 1 " + a).c_str();
+        log->LOG(&memberNode->addr,s);
     }
     // old pre2 fails
     // promote secondary to primary locally
-    else if (pre2 == haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"pre 2");
+    else if (pre2.getHashCode() == haveReplicasOf[0].getHashCode() && pre2.getHashCode() != haveReplicasOf[1].getHashCode()) {
+        s = ("pre 2 " + a).c_str();
+        log->LOG(&memberNode->addr,s);
         // promte current secondary to primary
         // and send msg to post1 to promote tertiary to secondary
         // send msg to post2 to create tertiary
@@ -600,16 +606,17 @@ void MP2Node::stabilizationProtocol() {
                 Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_sec,&(haveReplicasOf[0].nodeAddress));
-                sendMsg(msg_ter,&(haveReplicasOf[1].nodeAddress));
+                sendMsg(msg_sec,&(pre1.nodeAddress));
+                sendMsg(msg_ter,&(pre2.nodeAddress));
             }
         }
     }
     
     // both old pre1 and old pre2 fail
     // promote both secondary and tertiary to primary locally
-    else if (pre1 != haveReplicasOf[0].getHashCode() && pre2 != haveReplicasOf[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"pre 1 2");
+    else if (pre1.getHashCode() != haveReplicasOf[0].getHashCode() && pre2.getHashCode() != haveReplicasOf[1].getHashCode()) {
+        s = ("pre 1 2 " + a).c_str();
+        log->LOG(&memberNode->addr,s);
         for (auto it : ht->hashTable) {
             string value;
             int replicaType;
@@ -627,8 +634,8 @@ void MP2Node::stabilizationProtocol() {
                 Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_sec,&(haveReplicasOf[0].nodeAddress));
-                sendMsg(msg_ter,&(haveReplicasOf[1].nodeAddress));
+                sendMsg(msg_sec,&(pre1.nodeAddress));
+                sendMsg(msg_ter,&(pre2.nodeAddress));
             }
             if (static_cast<ReplicaType>(replicaType) == TERTIARY) {
                 if (updateKeyValue(it.first,value,PRIMARY)) {
@@ -641,15 +648,16 @@ void MP2Node::stabilizationProtocol() {
                 Message msg_sec(0,memberNode->addr,CREATE,it.first,value,SECONDARY);
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_sec,&(haveReplicasOf[0].nodeAddress));
-                sendMsg(msg_ter,&(haveReplicasOf[1].nodeAddress));
+                sendMsg(msg_sec,&(pre1.nodeAddress));
+                sendMsg(msg_ter,&(pre2.nodeAddress));
             }
         }
     }
     
     // only post2 fails
-    if (post1 == hasMyReplicas[0].getHashCode() && post2 != hasMyReplicas[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"post 2");
+    if (post1.getHashCode() == hasMyReplicas[0].getHashCode() && post2.getHashCode() != hasMyReplicas[1].getHashCode()) {
+        s = ("post 2 " + a).c_str();
+        log->LOG(&memberNode->addr, s);
         for (auto it : ht->hashTable) {
             string value;
             int replicaType;
@@ -658,13 +666,14 @@ void MP2Node::stabilizationProtocol() {
             if (static_cast<ReplicaType>(replicaType) == PRIMARY) {
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
+                sendMsg(msg_ter,&(post2.nodeAddress));
             }    
         }
     }
     // only post1 fails
-    else if (post1 != hasMyReplicas[0].getHashCode() && post1 == hasMyReplicas[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"only post1 fails");
+    else if (post1.getHashCode() != hasMyReplicas[0].getHashCode() && post1.getHashCode() == hasMyReplicas[1].getHashCode()) {
+        s = ("post 1 " + a).c_str();
+        log->LOG(&memberNode->addr,s);
         for (auto it : ht->hashTable) {
             string value;
             int replicaType;
@@ -674,14 +683,15 @@ void MP2Node::stabilizationProtocol() {
                 Message msg_sec(0,memberNode->addr,UPDATE,it.first,value,SECONDARY);
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_sec,&(hasMyReplicas[0].nodeAddress));
-                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
+                sendMsg(msg_sec,&(post1.nodeAddress));
+                sendMsg(msg_ter,&(post2.nodeAddress));
             }    
         }
     }
     // both post1 and post2 fail
-    else if (post1 != hasMyReplicas[0].getHashCode() && post2 != hasMyReplicas[1].getHashCode()) {
-        log->LOG(&memberNode->addr,"both post1 and post2 fail");
+    else if (post1.getHashCode() != hasMyReplicas[0].getHashCode() && post2.getHashCode() != hasMyReplicas[1].getHashCode()) {
+        s = ("post 1 2 " + a).c_str();
+        log->LOG(&memberNode->addr,s);
         for (auto it : ht->hashTable) {
             string value;
             int replicaType;
@@ -691,8 +701,8 @@ void MP2Node::stabilizationProtocol() {
                 Message msg_sec(0,memberNode->addr,CREATE,it.first,value,SECONDARY);
                 Message msg_ter(0,memberNode->addr,CREATE,it.first,value,TERTIARY);
                 
-                sendMsg(msg_sec,&(hasMyReplicas[0].nodeAddress));
-                sendMsg(msg_ter,&(hasMyReplicas[1].nodeAddress));
+                sendMsg(msg_sec,&(post1.nodeAddress));
+                sendMsg(msg_ter,&(post2.nodeAddress));
             }    
         }
     }
